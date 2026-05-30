@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.snowflake.operators.snowflake import SnowflakeSQLOperator
 
 default_args = {
     'owner': 'airflow',
