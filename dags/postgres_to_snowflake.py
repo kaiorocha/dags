@@ -55,8 +55,8 @@ def postgres_to_snowflake():
                             for row in rows:
                                 sf_cursor.execute(insert_query, row)
 
-        max_id = get_max_primary_key(table_name)
-        load_incremental_data(table_name, max_id)
+         max_id = get_max_primary_key(table_name)
+         load_incremental_data(table_name, max_id)
 
-    postgres_to_snowflake_etl_dag = postgres_to_snowflake_etl()
-
+# Instantiate the DAG
+postgres_to_snowflake_dag = postgres_to_snowflake()
