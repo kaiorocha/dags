@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.providers.snowflake.operators.snowflake import SnowflakeSQLOperator
 
-# Define default arguments
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
@@ -13,7 +14,6 @@ default_args = {
     'retry_delay': timedelta(minutes=1),
 }
 
-# Define DAG
 dag = DAG(
     dag_id='postgres_to_snowflake',
     default_args=default_args,
@@ -22,32 +22,45 @@ dag = DAG(
     catchup=False,
 )
 
-# Table names
 table_names = ['veiculos', 'estados', 'cidades', 'concessionarias', 'vendedores', 'clientes', 'vendas']
 
-# Create tasks dynamically
+def extract_from_postgres(table_name, **context):
+    """Extrai dados do PostgreSQL"""
+    hook = PostgresHook(postgres_conn_id='postgres')
+
+    # Obter max ID
+    max_id_query = f"SELECT COALESCE(MAX(id), 0) FROM {table_name}"
+    max_id = hook.get_first(max_id_query)[0]
+
+    print(f"📊 Table: {table_name}")
+    print(f"🔍 Max ID: {max_id}")
+
+    # Salvar para próxima task
+    context['task_instance'].xcom_push(key='max_id', value=max_id)
+
+    return max_id
+
 previous_task = None
 for table_name in table_names:
-    # Task to get max ID
-    get_max_id_task = BashOperator(
-        task_id=f'get_max_id_{table_name}',
-        bash_command=f'echo "Getting max ID for table {table_name}"',
+    # Task 1: Extrair do PostgreSQL
+    extract_task = PythonOperator(
+        task_id=f'extract_{table_name}',
+        python_callable=extract_from_postgres,
+        op_kwargs={'table_name': table_name},
         dag=dag,
     )
 
-    # Task to load data
-    load_data_task = BashOperator(
-        task_id=f'load_data_{table_name}',
-        bash_command=f'echo "Loading data for table {table_name}"',
+    # Task 2: Placeholder para carregar no Snowflake (próximo passo)
+    load_task = PythonOperator(
+        task_id=f'load_{table_name}',
+        python_callable=lambda table=table_name: print(f"✓ Loading {table} to Snowflake"),
         dag=dag,
     )
 
-    # Set dependencies
-    get_max_id_task >> load_data_task
+    # Dependências
+    extract_task >> load_task
 
     if previous_task:
-        previous_task >> get_max_id_task
+        previous_task >> extract_task
 
-    previous_task = load_data_task
-
-
+    previous_task = load_task
